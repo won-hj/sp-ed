@@ -3,71 +3,67 @@ import 'package:camera/camera.dart';
 class CameraService {
   CameraController? _controller;
 
-  CameraController? get controller =>
-      _controller;
+  CameraController? get controller => _controller;
 
-  bool get isInitialized =>
-      _controller?.value.isInitialized ?? false;
+  bool get isInitialized => _controller?.value.isInitialized ?? false;
 
   Future<void> initialize() async {
-    final cameras =
-        await availableCameras();
+    final cameras = await availableCameras();
 
     if (cameras.isEmpty) {
-      throw Exception(
-        'No camera found.',
-      );
+      throw Exception('No camera found.');
     }
 
-    CameraDescription selectedCamera =
-        cameras.first;
+    final selectedCamera = cameras.firstWhere(
+      (camera) => camera.lensDirection == CameraLensDirection.front,
+      orElse: () => cameras.first,
+    );
 
-    for (final camera in cameras) {
-      if (camera.lensDirection ==
-          CameraLensDirection.front) {
-        selectedCamera = camera;
-        break;
-      }
-    }
-
-    _controller = CameraController(
+    final controller = CameraController(
       selectedCamera,
       ResolutionPreset.medium,
       enableAudio: false,
-      imageFormatGroup:
-          ImageFormatGroup.yuv420,
+      imageFormatGroup: ImageFormatGroup.yuv420,
     );
 
-    await _controller!.initialize();
+    await controller.initialize();
+    _controller = controller;
   }
 
   Future<void> startImageStream(
-    void Function(CameraImage image)
-        onImage,
+    void Function(CameraImage image) onImage,
   ) async {
-    if (_controller == null ||
-        !_controller!.value.isInitialized) {
-      throw Exception(
-        'Camera is not initialized.',
-      );
+    final controller = _controller;
+
+    if (controller == null || !controller.value.isInitialized) {
+      throw Exception('Camera is not initialized.');
     }
 
-    await _controller!.startImageStream(
-      onImage,
-    );
+    if (!controller.value.isStreamingImages) {
+      await controller.startImageStream(onImage);
+    }
   }
 
   Future<void> stopImageStream() async {
-    if (_controller != null &&
-        _controller!
-            .value
-            .isStreamingImages) {
-      await _controller!
-          .stopImageStream();
+    final controller = _controller;
+
+    if (controller != null && controller.value.isStreamingImages) {
+      await controller.stopImageStream();
     }
   }
 
   Future<void> dispose() async {
-    await _controller?.dispose();
+    final controller = _controller;
+    _controller = null;
+
+    if (controller == null) {
+      return;
+    }
+
+    if (controller.value.isStreamingImages) {
+      await controller.stopImageStream();
+    }
+
+    await controller.dispose();
   }
 }
